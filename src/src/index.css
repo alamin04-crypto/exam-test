@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .glass-effect {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg;
+  }
+  
+  .glass-effect-dark {
+    @apply bg-dark/70 backdrop-blur-md border border-gray-700/50 shadow-lg text-white;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Hind Siliguri', sans-serif;
+  background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+  color: #333;
+}
