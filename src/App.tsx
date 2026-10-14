@@ -1,12 +1,12 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
+import StudentLogin from './pages/StudentLogin';
+import StudentRegister from './pages/StudentRegister';
 
 // Temporary Placeholders for next step
-const StudentLogin = () => <div className="p-10 text-center">Student Login</div>;
-const StudentRegister = () => <div className="p-10 text-center">Student Register</div>;
-const Dashboard = () => <div className="p-10 text-center">Student Dashboard</div>;
-const AdminDashboard = () => <div className="p-10 text-center">Admin Dashboard</div>;
+const Dashboard = () => <div className="p-10 text-center mt-20 font-bold text-2xl">Student Dashboard</div>;
+const AdminDashboard = () => <div className="p-10 text-center mt-20 font-bold text-2xl">Admin Dashboard</div>;
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: JSX.Element, requireAdmin?: boolean }) => {
   const { currentUser, isAdmin, loading } = useAuth();
