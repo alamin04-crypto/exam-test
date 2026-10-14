@@ -3,9 +3,9 @@ import { useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
 import StudentLogin from './pages/StudentLogin';
 import StudentRegister from './pages/StudentRegister';
+import Dashboard from './pages/Dashboard'; // নতুন লাইন
 
-// Temporary Placeholders for next step
-const Dashboard = () => <div className="p-10 text-center mt-20 font-bold text-2xl">Student Dashboard</div>;
+// আগের const Dashboard = ... লাইনটি মুছে ফেলুন
 const AdminDashboard = () => <div className="p-10 text-center mt-20 font-bold text-2xl">Admin Dashboard</div>;
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: JSX.Element, requireAdmin?: boolean }) => {
@@ -26,7 +26,9 @@ function App() {
         <Route path="/login" element={<StudentLogin />} />
         <Route path="/register" element={<StudentRegister />} />
 
+        {/* Dashboard Route */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        
         <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminDashboard /></ProtectedRoute>} />
       </Routes>
     </div>
