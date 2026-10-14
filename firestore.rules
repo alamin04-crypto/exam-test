@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ফাংশন: ইউজার লগইন করা আছে কিনা চেক করা
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // ফাংশন: ইউজার অ্যাডমিন কিনা চেক করা (Custom Claims)
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // স্টুডেন্টদের প্রোফাইল: স্টুডেন্ট শুধু নিজের ডেটা পড়তে পারবে, অ্যাডমিন সব পারবে
+    match /students/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin(); 
+      // রেজিস্ট্রেশনের সময় ক্লাউড ফাংশন দিয়ে ডেটা রাইট করা হবে সিকিউরিটির জন্য
+    }
+
+    // অ্যাডমিনদের প্রোফাইল
+    match /admins/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // পরীক্ষার শিডিউল (সবাই দেখতে পারবে, তৈরি করবে শুধু অ্যাডমিন)
+    match /exams/{examId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // পরীক্ষার প্রশ্নব্যাংক এবং সঠিক উত্তর (স্টুডেন্টদের জন্য সম্পূর্ণ নিষিদ্ধ)
+    match /examPrivate/{examId} {
+      allow read, write: if isAdmin();
+    }
+
+    // স্টুডেন্টের জমা দেওয়া উত্তরপত্র
+    match /studentAnswers/{answerId} {
+      allow create: if isAuthenticated() && request.resource.data.studentUid == request.auth.uid;
+      allow read: if isAuthenticated() && (resource.data.studentUid == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // পাবলিশ হওয়া রেজাল্ট
+    match /results/{resultId} {
+      allow read: if isAuthenticated(); // রেজাল্ট পাবলিশ হলে সবাই লিডারবোর্ড দেখতে পারবে
+      allow write: if isAdmin();
+    }
+  }
+}
