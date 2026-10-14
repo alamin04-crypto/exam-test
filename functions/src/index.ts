@@ -2,95 +2,125 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Initialize Firebase Admin
 admin.initializeApp();
+const db = admin.firestore();
 
-/**
- * Gemini API Question Generator Function
- * This function is protected and can only be called by authenticated Admins.
- */
+// ১. AI Question Generator (আগের তৈরি করা)
 export const generateAiQuestions = functions
   .region("asia-south1")
-  .runWith({ 
-    secrets: ["GEMINI_API_KEY"], // Secret stored in Google Cloud Secret Manager
-    timeoutSeconds: 60 
-  })
+  .runWith({ secrets: ["GEMINI_API_KEY"], timeoutSeconds: 60 })
   .https.onCall(async (data, context) => {
-    
-    // Security Check: Verify if the user is an Admin
     if (!context.auth || !context.auth.token.admin) {
-      throw new functions.https.HttpsError(
-        "permission-denied", 
-        "Only authorized administrators can generate questions."
-      );
+      throw new functions.https.HttpsError("permission-denied", "Only admins can use AI.");
     }
 
     const { subject, chapter, difficulty, questionCount, language } = data;
-    
-    // Retrieve the secret API key from Firebase environment
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new functions.https.HttpsError(
-        "internal", 
-        "Gemini API key is not configured on the server."
-      );
-    }
+    
+    if (!apiKey) throw new functions.https.HttpsError("internal", "API Key missing.");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-flash for fast and accurate JSON generation
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
+      generationConfig: { responseMimeType: "application/json" }
     });
 
-    const prompt = `
-      You are an expert educational examiner. Create exactly ${questionCount} multiple-choice questions for ${subject}, specifically from the topic: ${chapter}.
-      The difficulty level should be ${difficulty}.
-      Language of the questions and explanations must be: ${language}.
-      
-      Generate the questions and automatically determine the correct answer. Provide a short explanation for each correct answer.
-      
-      Return ONLY a JSON array of objects following this exact structure:
-      [
-        {
-          "question": "Question text here?",
-          "options": {
-            "A": "Option 1",
-            "B": "Option 2",
-            "C": "Option 3",
-            "D": "Option 4"
-          },
-          "correctOption": "A",
-          "explanation": "Brief explanation of the answer",
-          "difficulty": "${difficulty}"
-        }
-      ]
-    `;
+    const prompt = `Create exactly ${questionCount} multiple-choice questions for ${subject}, topic: ${chapter}. Difficulty: ${difficulty}. Language: ${language}. Return ONLY a JSON array with: question, options (A,B,C,D), correctOption, explanation, difficulty.`;
 
     try {
       const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      
-      // Parse the JSON string returned by Gemini into a JavaScript object
-      const parsedQuestions = JSON.parse(responseText);
-      
+      const parsedQuestions = JSON.parse(result.response.text());
       return { success: true, questions: parsedQuestions };
-      
     } catch (error) {
-      console.error("AI Generation Failed:", error);
-      throw new functions.https.HttpsError(
-        "internal", 
-        "Failed to generate questions using AI. Please try again."
-      );
+      throw new functions.https.HttpsError("internal", "AI Generation Failed.");
     }
   });
 
-/**
- * Trigger to assign standard student role upon user creation
- */
-export const onUserCreated = functions.auth.user().onCreate(async (user) => {
-  // Automatically assign basic custom claims if needed, though admin must be set manually
-  console.log(`New user created: ${user.uid}`);
-});
+// ২. Secure Exam Submission & Auto Grading
+export const submitExam = functions
+  .region("asia-south1")
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
+    }
+
+    const { examId, studentAnswers, securityViolations } = data;
+    const uid = context.auth.uid;
+
+    // Fetch the private answer key (hidden from students)
+    const examPrivateRef = db.collection("examPrivate").doc(examId);
+    const examPrivateSnap = await examPrivateRef.get();
+
+    if (!examPrivateSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Answer key not found.");
+    }
+
+    const examData = examPrivateSnap.data();
+    const correctAnswers = examData?.answers || {};
+    const marksPerQuestion = examData?.marksPerQuestion || 1;
+    const negativeMarking = examData?.negativeMarking || 0;
+
+    let obtainedMarks = 0;
+    let correctCount = 0;
+    let wrongCount = 0;
+    const totalQuestions = Object.keys(correctAnswers).length;
+    const totalMarks = totalQuestions * marksPerQuestion;
+
+    // Calculate score
+    for (const [qId, correctOption] of Object.entries(correctAnswers)) {
+      const studentAns = studentAnswers[qId];
+      if (studentAns) {
+        if (studentAns === correctOption) {
+          obtainedMarks += marksPerQuestion;
+          correctCount++;
+        } else {
+          obtainedMarks -= negativeMarking;
+          wrongCount++;
+        }
+      }
+    }
+
+    const percentage = (obtainedMarks / totalMarks) * 100;
+
+    // Create the result record (Strictly HIDDEN by default)
+    const resultRecord = {
+      studentId: uid,
+      examId: examId,
+      totalQuestions,
+      correctCount,
+      wrongCount,
+      obtainedMarks,
+      totalMarks,
+      percentage: Math.max(0, percentage), // Prevent negative total
+      securityViolations: securityViolations || 0,
+      isPublished: false, // RULE: Must be false until Admin publishes
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await db.collection("results").add(resultRecord);
+
+    return { success: true, message: "Exam submitted successfully. Results will be available once published by the Admin." };
+  });
+
+// ৩. Admin Result Publish / Unpublish Toggle
+export const toggleResultPublish = functions
+  .region("asia-south1")
+  .https.onCall(async (data, context) => {
+    if (!context.auth || !context.auth.token.admin) {
+      throw new functions.https.HttpsError("permission-denied", "Only admins can publish results.");
+    }
+
+    const { examId, publishStatus } = data;
+    
+    // Update all results for this exam
+    const resultsRef = db.collection("results").where("examId", "==", examId);
+    const snapshot = await resultsRef.get();
+
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+      batch.update(doc.ref, { isPublished: publishStatus });
+    });
+
+    await batch.commit();
+    return { success: true, message: `Results ${publishStatus ? 'published' : 'unpublished'} successfully.` };
+  });
