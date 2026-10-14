@@ -6,10 +6,12 @@ import Home from './pages/Home';
 import StudentLogin from './pages/StudentLogin';
 import StudentRegister from './pages/StudentRegister';
 import Results from './pages/Results';
+import Leaderboard from './pages/Leaderboard';
 
 // Import Protected Student Pages
 import Dashboard from './pages/Dashboard';
 import LiveExam from './pages/LiveExam';
+
 
 // Import Admin Pages
 import AdminDashboard from './admin/AdminDashboard';
@@ -39,6 +41,7 @@ function App() {
         <Route path="/login" element={<StudentLogin />} />
         <Route path="/register" element={<StudentRegister />} />
         <Route path="/results" element={<Results />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
         
         {/* Student Protected Routes (শুধুমাত্র লগইন করা স্টুডেন্টদের জন্য) */}
         <Route path="/dashboard" element={
