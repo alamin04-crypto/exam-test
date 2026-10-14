@@ -3,10 +3,10 @@ import { useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
 import StudentLogin from './pages/StudentLogin';
 import StudentRegister from './pages/StudentRegister';
-import Dashboard from './pages/Dashboard'; // নতুন লাইন
+import Dashboard from './pages/Dashboard';
+import AdminDashboard from './admin/AdminDashboard'; // নতুন লাইন
 
-// আগের const Dashboard = ... লাইনটি মুছে ফেলুন
-const AdminDashboard = () => <div className="p-10 text-center mt-20 font-bold text-2xl">Admin Dashboard</div>;
+// আগের const AdminDashboard = ... লাইনটি মুছে ফেলুন
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: JSX.Element, requireAdmin?: boolean }) => {
   const { currentUser, isAdmin, loading } = useAuth();
@@ -25,10 +25,10 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<StudentLogin />} />
         <Route path="/register" element={<StudentRegister />} />
-
-        {/* Dashboard Route */}
+        
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         
+        {/* Admin Route */}
         <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminDashboard /></ProtectedRoute>} />
       </Routes>
     </div>
